@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento Estrutural — Grupo JEDI</title>
+
+    <!-- Chart.js + Zoom -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #060B18;
+            --bg-grad-1: #0B1224;
+            --bg-grad-2: #131C36;
+            --surface: rgba(23, 32, 58, 0.72);
+            --surface-solid: #17203A;
+            --border: rgba(120, 150, 220, 0.16);
+            --border-strong: rgba(120, 150, 220, 0.32);
+            --text: #F4F7FF;
+            --text-dim: #9AA9C7;
+            --accent: #4F8CFF;
+            --accent-2: #8B5CF6;
+            --accent-glow: rgba(79, 140, 255, 0.45);
+            --green: #22E3A0;
+            --red: #FF5C6C;
+            --amber: #FFC857;
+            --radius: 16px;
+            --radius-sm: 10px;
+            --shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.7);
+            --shadow-sm: 0 6px 18px -8px rgba(0, 0, 0, 0.5);
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0; padding: 0;
+            background:
+                radial-gradient(1200px 600px at 15% -10%, rgba(79,140,255,0.18), transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, rgba(139,92,246,0.16), transparent 55%),
+                linear-gradient(180deg, var(--bg-grad-1) 0%, var(--bg) 40%, #050914 100%);
+            background-attachment: fixed;
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, -apple-system, Tahoma, sans-serif;
+            min-height: 100vh;
+        }
+
+        body { padding: 0 0 60px; }
+
+        /* ================= HERO / HEADER ================= */
+        .hero {
+            position: relative;
+            padding: 42px 20px 30px;
+            text-align: center;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border);
+        }
+        .hero::before {
+            content: '';
+            position: absolute; inset: 0;
+            background:
+                radial-gradient(600px 300px at 50% 0%, rgba(79,140,255,0.25), transparent 70%);
+            pointer-events: none;
+        }
+        .hero-logo-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 160px; height: 160px;
+            margin-bottom: 18px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 45%, rgba(79,140,255,0.35), rgba(139,92,246,0.18) 55%, transparent 75%);
+            filter: drop-shadow(0 0 28px rgba(79,140,255,0.55));
+            animation: floatLogo 6s ease-in-out infinite;
+        }
+        @keyframes floatLogo {
+            0%, 100% { transform: translateY(0); }
+            50%      { transform: translateY(-6px); }
+        }
+        .hero-logo-wrap img {
+            width: 130px; height: 130px;
+            object-fit: contain;
+            border-radius: 50%;
+        }
+        .hero-logo-fallback {
+            width: 130px; height: 130px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.6rem; font-weight: 800;
+            color: white;
+            letter-spacing: 1px;
+        }
+        .hero h1 {
+            position: relative;
+            margin: 0;
+            font-size: clamp(1.5rem, 3vw, 2.2rem);
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            background: linear-gradient(90deg, #FFFFFF 0%, #9EC3FF 55%, #C7B3FF 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .hero p {
+            position: relative;
+            margin: 8px 0 0;
+            color: var(--text-dim);
+            font-size: 0.92rem;
+            letter-spacing: 0.4px;
+        }
+
+        /* ================= HEADER BAR (sticky) ================= */
+        .app-header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            background: rgba(10, 16, 32, 0.72);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 6px;
+            background: rgba(255,255,255,0.04);
+            padding: 5px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        .nav-tabs button {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            padding: 9px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .nav-tabs button:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+        .nav-tabs button.active {
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            color: white;
+            box-shadow: 0 6px 18px -6px var(--accent-glow);
+        }
+
+        .live-indicator {
+            font-size: 0.82rem;
+            color: var(--green);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            padding: 8px 14px;
+            border-radius: 10px;
+            background: rgba(34, 227, 160, 0.08);
+            border: 1px solid rgba(34, 227, 160, 0.25);
+            letter-spacing: 0.5px;
+        }
+        .pulse-dot {
+            width: 8px; height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(34,227,160,0.7); }
+            70%  { box-shadow: 0 0 0 8px rgba(34,227,160,0); }
+            100% { box-shadow: 0 0 0 0 rgba(34,227,160,0); }
+        }
+
+        /* ================= LAYOUT ================= */
+        .page { max-width: 1800px; margin: 0 auto; padding: 28px 20px; }
+
+        section.panel {
+            margin-bottom: 28px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        section.panel > .panel-header {
+            padding: 16px 22px;
+            background: linear-gradient(90deg, rgba(79,140,255,0.10), rgba(139,92,246,0.08));
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        section.panel > .panel-header h2 {
+            margin: 0;
+            font-size: 1.02rem;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .panel-header .panel-subtitle {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+        }
+        .panel-body { padding: 22px; }
+
+        /* ================= CONTROLES ================= */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .control-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-row label { font-size: 0.88rem; color: var(--text-dim); }
+
+        select, input[type="datetime-local"], button {
+            padding: 9px 14px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-strong);
+            background: rgba(8, 14, 28, 0.8);
+            color: var(--text);
+            font-size: 0.88rem;
+            transition: border-color 0.15s, background 0.15s, transform 0.1s;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(79,140,255,0.18);
+        }
+        button {
+            background: linear-gradient(135deg, var(--accent), #3A6FE0);
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+            box-shadow: 0 6px 16px -8px var(--accent-glow);
+        }
+        button:hover { filter: brightness(1.1); }
+        button:active { transform: translateY(1px); }
+        button.secondary {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--border-strong);
+            box-shadow: none;
+        }
+        button.secondary:hover { background: rgba(255,255,255,0.14); }
+
+        .status-badge {
+            font-size: 0.8rem;
+            color: var(--green);
+            font-weight: 600;
+            margin-left: auto;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(34,227,160,0.08);
+            border: 1px solid rgba(34,227,160,0.2);
+        }
+
+        /* ================= GRID DE GRÁFICOS ================= */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+        .chart-card {
+            background: rgba(8, 14, 28, 0.55);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            position: relative;
+            height: clamp(280px, 40vh, 400px);
+            width: 100%;
+            overflow: hidden;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        .chart-card:hover {
+            border-color: var(--border-strong);
+            transform: translateY(-2px);
+        }
+
+        /* ================= VISUALIZADOR 3D ================= */
+        #viewer3d-wrap {
+            position: relative;
+            width: 100%;
+            height: 70vh;
+            min-height: 420px;
+            background: radial-gradient(circle at 50% 30%, #1B2545 0%, #0A1120 80%);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        #container3d { width: 100%; height: 100%; }
+
+        #info3d {
+            position: absolute; top: 12px; left: 12px;
+            color: #E6EEFF;
+            background: rgba(8, 14, 28, 0.78);
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            z-index: 100;
+            font-size: 12px;
+            border-radius: 10px;
+            pointer-events: none;
+            backdrop-filter: blur(6px);
+        }
+
+        #controls3d {
+            background: rgba(8, 14, 28, 0.55);
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: var(--text);
+            font-size: 13px;
+            border: 1px solid var(--border);
+            width: 100%;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 16px;
+            z-index: 10;
+        }
+        #controls3d label { font-weight: 600; color: var(--text-dim); }
+        #controls3d select {
+            width: auto;
+            min-width: 220px;
+        }
+        .slider-container {
+            display: flex; align-items: center; gap: 12px;
+            flex: 1; min-width: 260px;
+        }
+        .slider-container label { white-space: nowrap; }
+        input[type=range] { flex: 1; accent-color: var(--accent); }
+
+        #legend-container {
+            position: absolute; bottom: 20px; right: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            z-index: 100;
+        }
+        #legend-title {
+            color: white; font-size: 12px; font-weight: 700;
+            margin-bottom: 8px;
+            background: rgba(8, 14, 28, 0.78);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.3px;
+        }
+        #legend-wrapper { display: flex; flex-direction: row; height: 200px; }
+        #colorbar {
+            width: 20px; height: 100%;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.6);
+            background: linear-gradient(to top, blue 0%, cyan 25%, lime 50%, yellow 75%, red 100%);
+        }
+        #legend-labels {
+            display: flex; flex-direction: column; justify-content: space-between;
+            margin-left: 8px; height: 100%;
+            color: white; font-size: 11px;
+            font-family: 'Consolas', monospace;
+            background: rgba(8, 14, 28, 0.78);
+            border: 1px solid var(--border);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .viewer-overlay {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(6, 11, 24, 0.88);
+            backdrop-filter: blur(4px);
+            z-index: 200;
+            flex-direction: column;
+            gap: 16px;
+            color: var(--text-dim);
+            font-size: 0.92rem;
+            text-align: center;
+            padding: 20px;
+        }
+        .viewer-overlay.hidden { display: none; }
+        .spinner {
+            width: 42px; height: 42px;
+            border: 3px solid rgba(120, 150, 220, 0.2);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .hidden { display: none !important; }
+        .section-anchor { scroll-margin-top: 90px; }
+
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(var(--accent), var(--accent-2));
+            border-radius: 5px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+
+        /* ================= RESPONSIVIDADE ================= */
+        @media (max-width: 900px) {
+            .app-header { flex-direction: column; align-items: stretch; }
+            .nav-tabs { justify-content: center; width: 100%; }
+            .nav-tabs button { flex: 1; text-align: center; padding: 9px 10px; font-size: 0.82rem; }
+            .live-indicator { justify-content: center; }
+            .page { padding: 16px 12px; }
+            .hero { padding: 30px 16px 22px; }
+            .hero-logo-wrap { width: 120px; height: 120px; }
+            .hero-logo-wrap img, .hero-logo-fallback { width: 96px; height: 96px; }
+            .hero-logo-fallback { font-size: 2rem; }
+
+            #viewer3d-wrap { height: 60vh; min-height: 340px; }
+            #controls3d { flex-direction: column; align-items: stretch; }
+            #controls3d select { width: 100%; }
+            .slider-container { flex-direction: column; align-items: flex-start; min-width: 100%; }
+            .slider-container input[type=range] { width: 100%; }
+
+            #info3d { display: none; }
+            #legend-container { bottom: 10px; right: 10px; }
+            #legend-wrapper { height: 150px; }
+
+            .status-badge { margin-left: 0; width: 100%; text-align: center; }
+        }
+
+        @media (max-width: 480px) {
+            .chart-card { height: 260px; padding: 8px; }
+            section.panel > .panel-header { padding: 12px 16px; }
+            .panel-body { padding: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ================= HERO (LOGO NO TOPO) ================= -->
+    <section class="hero">
+        <div class="hero-logo-wrap">
+            <img
+                src="Neon Jedi Structural Monitoring Emblem.png"
+                alt="Emblema Neon — Grupo JEDI"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+            >
+            <div class="hero-logo-fallback" style="display:none;">JEDI</div>
+        </div>
+        <h1>Monitoramento Estrutural</h1>
+        <p>Plataforma de análise em tempo real · Visualização 3D &amp; Análise Espectral</p>
+    </section>
+
+    <!-- ================= HEADER BAR ================= -->
+    <header class="app-header">
+        <nav class="nav-tabs">
+            <button id="tabEstrutura" onclick="navegarPara('sectionEstrutura')" class="active">🏗️ Estrutura (3D)</button>
+            <button id="tabGraficos" onclick="navegarPara('sectionGraficos')">📊 Gráficos</button>
+        </nav>
+
+        <div class="live-indicator">
+            <span class="pulse-dot"></span>
+            <span id="txtLiveStatus">MODO TEMPO REAL</span>
+        </div>
+    </header>
+
+    <div class="page">
+
+        <!-- ================= SEÇÃO 1: VISUALIZADOR 3D ================= -->
+        <section class="panel section-anchor" id="sectionEstrutura">
+            <div class="panel-header">
+                <h2>🏗️ Visualizador Estrutural Interativo</h2>
+                <span class="panel-subtitle">Rotacione com o mouse · Zoom na roda · Troque o campo</span>
+            </div>
+            <div class="panel-body">
+
+                <div id="controls3d">
+                    <label for="fieldSelect">Resultado:</label>
+                    <select id="fieldSelect" disabled>
+                        <option value="S_Mises">Tensão (von Mises)</option>
+                        <option value="U_Mag">Deslocamento (Deformada)</option>
+                    </select>
+                    <div class="slider-container">
+                        <label for="scaleSlider">Escala da Deformada: <span id="scaleValue">50x</span></label>
+                        <input type="range" id="scaleSlider" min="0" max="200" value="50" step="10" disabled>
+                    </div>
+                </div>
+
+                <div id="viewer3d-wrap">
+                    <div id="container3d"></div>
+
+                    <div id="info3d">
+                        <b>Visualizador</b><br>
+                        <i>Arraste para rotacionar · Roda para zoom</i>
+                    </div>
+
+                    <div id="legend-container">
+                        <div id="legend-title">von Mises (MPa)</div>
+                        <div id="legend-wrapper">
+                            <div id="colorbar"></div>
+                            <div id="legend-labels">
+                                <span id="lbl-0">-</span><span id="lbl-1">-</span>
+                                <span id="lbl-2">-</span><span id="lbl-3">-</span>
+                                <span id="lbl-4">-</span><span id="lbl-5">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="viewerOverlay" class="viewer-overlay">
+                        <div class="spinner"></div>
+                        <div id="overlayText">Carregando visualizador 3D…</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SEÇÃO 2: GRÁFICOS ================= -->
+        <section class="panel section-anchor" id="sectionGraficos">
+            <div class="panel-header">
+                <h2>📊 Monitoramento — Aceleração &amp; FFT (4 Placas)</h2>
+                <span class="panel-subtitle">Sincronização automática com a planilha</span>
+            </div>
+            <div class="panel-body">
+
+                <div class="controls" style="margin-bottom: 20px;">
+                    <div class="control-row">
+                        <label style="font-weight: 600; color: var(--text);">Modo:</label>
+                        <select id="selectModo" onchange="alternarModo()">
+                            <option value="realtime">Tempo Real</option>
+                            <option value="historico">Histórico</option>
+                        </select>
+                        <button class="secondary" onclick="resetZoomTodos()">Resetar Zoom</button>
+                    </div>
+
+                    <div id="painelRealtime" class="control-row">
+                        <label>Intervalo:</label>
+                        <select id="selectIntervalo" onchange="reiniciarTimer()">
+                            <option value="10000">10 segundos</option>
+                            <option value="30000">30 segundos</option>
+                            <option value="60000">1 minuto</option>
+                            <option value="300000">5 minutos</option>
+                            <option value="600000">10 minutos</option>
+                            <option value="1800000">30 minutos</option>
+                            <option value="3600000">1 hora</option>
+                        </select>
+                        <button onclick="forcarAtualizacao()">Sincronizar</button>
+                        <span id="lastUpdate" class="status-badge">Pronto</span>
+                    </div>
+
+                    <div id="painelHistorico" class="control-row hidden">
+                        <label>Início:</label>
+                        <input type="datetime-local" id="inputInicio">
+                        <label>Fim:</label>
+                        <input type="datetime-local" id="inputFim">
+                        <button onclick="aplicarFiltroHistorico()">Aplicar Filtro</button>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card"><canvas id="chartPlaca1Acel"></canvas></div>
+                    <div class="chart-card"><canvas id="chartPlaca1FFT"></canvas></div>
+                    <div class="chart-card"><canvas id="chartPlaca2Acel"></canvas></div>
+                    <div class="chart-card"><canvas id="chartPlaca2FFT"></canvas></div>
+                    <div class="chart-card"><canvas id="chartPlaca3Acel"></canvas></div>
+                    <div class="chart-card"><canvas id="chartPlaca3FFT"></canvas></div>
+                    <div class="chart-card"><canvas id="chartPlaca4Acel"></canvas></div>
+                    <div class="chart-card"><canvas id="chartPlaca4FFT"></canvas></div>
+                </div>
+
+            </div>
+        </section>
+    </div>
+
+    <script>
+    /* =====================================================================
+       ESTADO GLOBAL ÚNICO
+       ===================================================================== */
+    const AppState = {
+        chartsInstances: {},
+        timerIntervalo: null,
+        requisicaoEmAndamento: false,
+        abortController: null,
+        ultimaFFT: {},
+        vtk: null,
+        vtkReady: false,
+        vtkLoading: false,
+        originalPolydata: null,
+        currentField: 'S_Mises',
+        scaleFactor: 0.05,
+        renderer: null,
+        renderWindow: null,
+        actor: null,
+        mapper: null,
+        rafPending: false
+    };
+
+    /* =====================================================================
+       NAVEGAÇÃO
+       ===================================================================== */
+    function navegarPara(sectionId) {
+        const el = document.getElementById(sectionId);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('tabEstrutura').classList.toggle('active', sectionId === 'sectionEstrutura');
+        document.getElementById('tabGraficos').classList.toggle('active', sectionId === 'sectionGraficos');
+        if (sectionId === 'sectionEstrutura' && !AppState.vtkReady && !AppState.vtkLoading) {
+            carregarVTK();
+        }
+    }
+
+    /* =====================================================================
+       MÓDULO 1: VISUALIZADOR 3D
+       ===================================================================== */
+    async function carregarVTK() {
+        if (AppState.vtkReady || AppState.vtkLoading) return;
+        AppState.vtkLoading = true;
+
+        const overlay = document.getElementById('viewerOverlay');
+        const overlayText = document.getElementById('overlayText');
+        overlay.classList.remove('hidden');
+        overlayText.innerText = 'Carregando motor 3D (VTK.js)…';
+
+        try {
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://unpkg.com/vtk.js';
+                s.onload = resolve;
+                s.onerror = () => reject(new Error('Falha ao carregar VTK.js. Verifique sua internet.'));
+                document.head.appendChild(s);
+            });
+
+            if (!window.vtk) throw new Error('VTK.js não expôs o objeto global "vtk"');
+            AppState.vtk = window.vtk;
+
+            overlayText.innerText = 'Inicializando cena…';
+            inicializarCena3D();
+
+            overlayText.innerText = 'Baixando malha (FEMMeshGmsh_mod.vtp)…';
+            await carregarMalha3D();
+
+            AppState.vtkReady = true;
+            overlay.classList.add('hidden');
+        } catch (err) {
+            console.error('Erro ao inicializar 3D:', err);
+            overlayText.innerHTML = `⚠️ Erro no Visualizador 3D:<br><br>
+                <span style="color:#FF5C6C; font-weight:bold;">${err.message}</span><br><br>
+                <small>Dica: O link do arquivo .vtp está correto no GitHub? O repositório é público?</small>`;
+        } finally {
+            AppState.vtkLoading = false;
+        }
+    }
+
+    function inicializarCena3D() {
+        const vtk = AppState.vtk;
+
+        const fullScreenRenderer = vtk.Rendering.Misc.vtkFullScreenRenderWindow.newInstance({
+            rootContainer: document.getElementById('container3d'),
+            background: [0.04, 0.07, 0.14]
+        });
+        const renderer = fullScreenRenderer.getRenderer();
+        const renderWindow = fullScreenRenderer.getRenderWindow();
+
+        const actor = vtk.Rendering.Core.vtkActor.newInstance();
+        const mapper = vtk.Rendering.Core.vtkMapper.newInstance();
+
+        const property = actor.getProperty();
+        property.setAmbient(0.2);
+        property.setDiffuse(0.85);
+        property.setSpecular(0.15);
+
+        actor.setMapper(mapper);
+        renderer.addActor(actor);
+
+        AppState.renderer = renderer;
+        AppState.renderWindow = renderWindow;
+        AppState.actor = actor;
+        AppState.mapper = mapper;
+    }
+
+    function carregarMalha3D() {
+        const vtk = AppState.vtk;
+        return new Promise((resolve, reject) => {
+            const reader = vtk.IO.XML.vtkXMLPolyDataReader.newInstance();
+            const urlGithub = 'https://raw.githubusercontent.com/wlfernandes13/dashboardTCC/main/FEMMeshGmsh_mod.vtp';
+
+            reader.setUrl(urlGithub).then(() => {
+                const polydata = reader.getOutputData(0);
+                if (!polydata || polydata.getNumberOfPoints() === 0) {
+                    throw new Error("O arquivo .vtp foi carregado, mas não contém pontos.");
+                }
+
+                AppState.originalPolydata = polydata;
+                AppState.mapper.setInputData(AppState.originalPolydata);
+
+                AppState.renderer.resetCamera();
+                const camera = AppState.renderer.getActiveCamera();
+                camera.zoom(1.5);
+                camera.elevation(30);
+                camera.azimuth(30);
+                AppState.renderer.resetCameraClippingRange();
+                AppState.renderWindow.render();
+
+                document.getElementById('fieldSelect').disabled = false;
+                document.getElementById('scaleSlider').disabled = false;
+
+                atualizarVisualizacao3D();
+                resolve();
+            }).catch(() => {
+                reject(new Error("Falha ao baixar a malha do GitHub. Verifique a URL ou o CORS."));
+            });
+        });
+    }
+
+    function atualizarVisualizacao3D() {
+        const vtk = AppState.vtk;
+        const original = AppState.originalPolydata;
+        if (!vtk || !original || !AppState.vtkReady) return;
+
+        const polydata = vtk.Common.DataModel.vtkPolyData.newInstance();
+        polydata.shallowCopy(original);
+        const pointData = polydata.getPointData();
+
+        const numPoints = polydata.getNumberOfPoints();
+        const colors = new Uint8Array(numPoints * 4);
+
+        let values = null;
+        let min = 0, max = 1;
+
+        /* ---------- TENSÃO: Pa → MPa (corrigido) ---------- */
+        if (AppState.currentField === 'S_Mises') {
+            const scalarArray = pointData.getArrayByName('S_Mises');
+            if (scalarArray) {
+                const FATOR_PA_MPA = 1e-6; // 1 MPa = 1e6 Pa
+                const raw = scalarArray.getData();               // valores originais em Pa
+                const range = scalarArray.getRange();            // [minPa, maxPa]
+
+                // Converte o array para MPa (usado tanto no cálculo de cor quanto na legenda)
+                values = new Float32Array(raw.length);
+                for (let i = 0; i < raw.length; i++) values[i] = raw[i] * FATOR_PA_MPA;
+
+                min = range[0] * FATOR_PA_MPA;
+                max = range[1] * FATOR_PA_MPA;
+
+                document.getElementById('legend-title').innerText = 'von Mises (MPa)';
+            }
+        } else {
+            /* ---------- DESLOCAMENTO ---------- */
+            const uArray = pointData.getArrayByName('U');
+            if (uArray) {
+                const points = polydata.getPoints();
+                const originalPoints = points.getData();
+                const uData = uArray.getData();
+                const newPoints = new Float32Array(originalPoints.length);
+                values = new Float32Array(numPoints);
+
+                let maxU = 0;
+                const s = AppState.scaleFactor;
+                for (let i = 0; i < numPoints; i++) {
+                    const ux = uData[i * 3];
+                    const uy = uData[i * 3 + 1];
+                    const uz = uData[i * 3 + 2];
+
+                    newPoints[i * 3]     = originalPoints[i * 3]     + ux * s;
+                    newPoints[i * 3 + 1] = originalPoints[i * 3 + 1] + uy * s;
+                    newPoints[i * 3 + 2] = originalPoints[i * 3 + 2] + uz * s;
+
+                    const mag = Math.sqrt(ux*ux + uy*uy + uz*uz);
+                    values[i] = mag;
+                    if (mag > maxU) maxU = mag;
+                }
+                points.setData(newPoints);
+                polydata.modified();
+
+                min = 0;
+                max = maxU > 0 ? maxU : 1;
+                document.getElementById('legend-title').innerText = 'Deslocamento (mm)';
+            }
+        }
+
+        if (!values) { AppState.renderWindow.render(); return; }
+
+        const diff = (max - min) === 0 ? 1 : (max - min);
+        const casas = diff < 0.01 ? 5 : diff < 0.1 ? 4 : diff < 1 ? 3 : 2;
+        for (let i = 0; i < 6; i++) {
+            const fraction = 1.0 - (i / 5);
+            const val = min + diff * fraction;
+            document.getElementById('lbl-' + i).innerText = val.toFixed(casas);
+        }
+
+        for (let i = 0; i < numPoints; i++) {
+            const t = (values[i] - min) / diff;
+            let r, g, b;
+            if (t < 0.25)      { r = 0;             g = t * 4;             b = 1; }
+            else if (t < 0.5)  { r = 0;             g = 1;                 b = 1 - (t - 0.25) * 4; }
+            else if (t < 0.75) { r = (t - 0.5) * 4; g = 1;                 b = 0; }
+            else               { r = 1;             g = 1 - (t - 0.75) * 4; b = 0; }
+
+            const idx = i * 4;
+            colors[idx]     = r * 255;
+            colors[idx + 1] = g * 255;
+            colors[idx + 2] = b * 255;
+            colors[idx + 3] = 255;
+        }
+
+        const colorDataArray = vtk.Common.Core.vtkDataArray.newInstance({
+            name: 'Colors', values: colors, numberOfComponents: 4
+        });
+        pointData.addArray(colorDataArray);
+        pointData.setActiveScalars('Colors');
+
+        AppState.mapper.setScalarModeToUsePointFieldData();
+        AppState.mapper.setColorByArrayName('Colors');
+        AppState.mapper.setScalarRange(min, max);
+        AppState.mapper.setInputData(polydata);
+        AppState.renderWindow.render();
+    }
+
+    function agendarAtualizacao3D() {
+        if (AppState.rafPending) return;
+        AppState.rafPending = true;
+        requestAnimationFrame(() => {
+            AppState.rafPending = false;
+            atualizarVisualizacao3D();
+        });
+    }
+
+    document.getElementById('fieldSelect').addEventListener('change', (e) => {
+        AppState.currentField = e.target.value;
+        agendarAtualizacao3D();
+    });
+
+    const slider3d = document.getElementById('scaleSlider');
+    const scaleValueLabel = document.getElementById('scaleValue');
+    slider3d.addEventListener('input', (e) => {
+        const fator = parseInt(e.target.value);
+        scaleValueLabel.innerText = fator + 'x';
+        AppState.scaleFactor = fator * 0.001;
+        if (AppState.currentField === 'U_Mag') agendarAtualizacao3D();
+    });
+
+    /* =====================================================================
+       MÓDULO 2: GRÁFICOS
+       ===================================================================== */
+    const SPREADSHEET_ID = '1UE60YdMQbzMsPmKFnq2p9QADqVC9TVblLanJJDEqL3Y';
+    const MAX_CACHE_PONTOS   = 5000;
+    const MAX_PONTOS_GRAFICO = 600;
+    const MAX_PONTOS_FFT     = 128;
+
+    const placasConfig = [
+        { id: '647241587',  nome: 'Placa 1 (Placa_01)', acelId: 'chartPlaca1Acel', fftId: 'chartPlaca1FFT', cache: [] },
+        { id: '199228400',  nome: 'Placa 2 (Placa_02)', acelId: 'chartPlaca2Acel', fftId: 'chartPlaca2FFT', cache: [] },
+        { id: '1321485967', nome: 'Placa 3 (Placa_04)', acelId: 'chartPlaca3Acel', fftId: 'chartPlaca3FFT', cache: [] },
+        { id: '628945184',  nome: 'Placa 4 (Placa_05)', acelId: 'chartPlaca4Acel', fftId: 'chartPlaca4FFT', cache: [] }
+    ];
+
+    function inicializarGraficos() {
+        const gridColor = 'rgba(120,150,220,0.12)';
+        const tickColor = '#9AA9C7';
+
+        placasConfig.forEach(placa => {
+            const ctxAcel = document.getElementById(placa.acelId).getContext('2d');
+            AppState.chartsInstances[placa.acelId] = new Chart(ctxAcel, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'X (m/s²)', data: [], borderColor: '#FF5C6C', borderWidth: 1.6, fill: false, pointRadius: 0, spanGaps: true, tension: 0.25 },
+                        { label: 'Y (m/s²)', data: [], borderColor: '#22E3A0', borderWidth: 1.6, fill: false, pointRadius: 0, spanGaps: true, tension: 0.25 },
+                        { label: 'Z (m/s²)', data: [], borderColor: '#4F8CFF', borderWidth: 1.6, fill: false, pointRadius: 0, spanGaps: true, tension: 0.25 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        decimation: { enabled: true, algorithm: 'min-max', samples: MAX_PONTOS_GRAFICO },
+                        title: { display: true, text: `${placa.nome} — Aceleração`, color: '#F4F7FF', font: { size: 13, weight: '600' } },
+                        legend: { labels: { color: tickColor, boxWidth: 12, font: { size: 10 } } },
+                        zoom: {
+                            pan: { enabled: false },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'y' }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: tickColor, maxTicksLimit: 5, font: { size: 10 } }, grid: { color: gridColor } },
+                        y: { ticks: { color: tickColor, font: { size: 10 } }, grid: { color: gridColor } }
+                    }
+                }
+            });
+
+            const ctxFFT = document.getElementById(placa.fftId).getContext('2d');
+            AppState.chartsInstances[placa.fftId] = new Chart(ctxFFT, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Magnitude',
+                        data: [],
+                        backgroundColor: 'rgba(139, 92, 246, 0.85)',
+                        borderRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        title: { display: true, text: `${placa.nome} — FFT`, color: '#F4F7FF', font: { size: 13, weight: '600' } },
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { ticks: { color: tickColor, maxTicksLimit: 5, font: { size: 10 } }, grid: { color: gridColor } },
+                        y: { ticks: { color: tickColor, font: { size: 10 } }, grid: { color: gridColor } }
+                    }
+                }
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            Object.values(AppState.chartsInstances).forEach(chart => chart.resize());
+        });
+    }
+
+    function parseCellDataHora(cell) {
+        if (!cell) return null;
+        if (typeof cell.v === 'string' && cell.v.indexOf('Date(') === 0) {
+            const matches = cell.v.match(/\d+/g);
+            if (matches && matches.length >= 3) {
+                return new Date(
+                    parseInt(matches[0]), parseInt(matches[1]), parseInt(matches[2]),
+                    parseInt(matches[3] || 0), parseInt(matches[4] || 0), parseInt(matches[5] || 0)
+                );
+            }
+        }
+        const str = cell.f || cell.v;
+        if (!str) return null;
+        const partes = String(str).trim().split(' ');
+        if (partes.length >= 1) {
+            const dataPartes = partes[0].split('/');
+            if (dataPartes.length === 3) {
+                const m = parseInt(dataPartes[0]) - 1;
+                const d = parseInt(dataPartes[1]);
+                const a = parseInt(dataPartes[2]);
+                let h = 0, min = 0, s = 0;
+                if (partes.length >= 2) {
+                    const hp = partes[1].split(':');
+                    h = parseInt(hp[0] || 0); min = parseInt(hp[1] || 0); s = parseInt(hp[2] || 0);
+                }
+                const dt = new Date(a, m, d, h, min, s);
+                if (!isNaN(dt.getTime())) return dt;
+            }
+        }
+        const parsedNative = new Date(str);
+        return isNaN(parsedNative.getTime()) ? null : parsedNative;
+    }
+
+    function formatarParaDatetimeLocal(date) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function definirDatasDefaultHoje() {
+        const agora = new Date();
+        const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0);
+        const fimHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59);
+        document.getElementById('inputInicio').value = formatarParaDatetimeLocal(inicioHoje);
+        document.getElementById('inputFim').value = formatarParaDatetimeLocal(fimHoje);
+    }
+
+    function calcularFFT(sinal, fs) {
+        const N = sinal.length;
+        if (N === 0) return { freqs: [], mags: [] };
+
+        let n = 1;
+        while (n < N) n <<= 1;
+        const re = new Float64Array(n);
+        const im = new Float64Array(n);
+        for (let i = 0; i < N; i++) re[i] = sinal[i];
+
+        for (let i = 1, j = 0; i < n; i++) {
+            let bit = n >> 1;
+            for (; j & bit; bit >>= 1) j ^= bit;
+            j ^= bit;
+            if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+        }
+
+        for (let len = 2; len <= n; len <<= 1) {
+            const ang = -2 * Math.PI / len;
+            const wRe = Math.cos(ang), wIm = Math.sin(ang);
+            for (let i = 0; i < n; i += len) {
+                let curRe = 1, curIm = 0;
+                for (let k = 0; k < len / 2; k++) {
+                    const uRe = re[i + k], uIm = im[i + k];
+                    const vRe = re[i + k + len / 2] * curRe - im[i + k + len / 2] * curIm;
+                    const vIm = re[i + k + len / 2] * curIm + im[i + k + len / 2] * curRe;
+                    re[i + k] = uRe + vRe; im[i + k] = uIm + vIm;
+                    re[i + k + len / 2] = uRe - vRe; im[i + k + len / 2] = uIm - vIm;
+                    const nRe = curRe * wRe - curIm * wIm;
+                    curIm = curRe * wIm + curIm * wRe;
+                    curRe = nRe;
+                }
+            }
+        }
+
+        const freqs = [], mags = [];
+        for (let k = 1; k < Math.floor(n / 2); k++) {
+            const mag = Math.sqrt(re[k] * re[k] + im[k] * im[k]) / n;
+            freqs.push(((k * fs) / n).toFixed(2) + ' Hz');
+            mags.push(Number(mag.toFixed(4)));
+        }
+        return { freqs, mags };
+    }
+
+    function baixarDadosTodasPlacas(callback) {
+        if (AppState.requisicaoEmAndamento) { if (callback) callback(); return; }
+        AppState.requisicaoEmAndamento = true;
+        document.getElementById('lastUpdate').innerText = 'Sincronizando 4 placas…';
+
+        if (AppState.abortController) AppState.abortController.abort();
+        AppState.abortController = new AbortController();
+        const signal = AppState.abortController.signal;
+
+        const promessas = placasConfig.map(placa => {
+            const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${placa.id}`;
+            return fetch(url, { signal })
+                .then(res => res.text())
+                .then(txt => {
+                    const jsonString = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
+                    if (!jsonString) return;
+                    const data = JSON.parse(jsonString[1]);
+                    const novoCache = data.table.rows.map(row => {
+                        if (!row.c) return null;
+                        const cell0 = row.c[0];
+                        const dateObj = parseCellDataHora(cell0);
+                        if (!dateObj) return null;
+                        const horaStr = cell0.f || cell0.v || dateObj.toLocaleString('pt-BR');
+                        const x = row.c[2] ? Number(row.c[2].v) : 0;
+                        const y = row.c[3] ? Number(row.c[3].v) : 0;
+                        const z = row.c[4] ? Number(row.c[4].v) : 0;
+                        const resultante = Math.sqrt(x * x + y * y + z * z);
+                        return { dataHora: dateObj, horaStr, x, y, z, resultante, dt: row.c[5] ? Number(row.c[5].v) : 0 };
+                    }).filter(item => item !== null);
+
+                    placa.cache = novoCache.length > MAX_CACHE_PONTOS
+                        ? novoCache.slice(-MAX_CACHE_PONTOS)
+                        : novoCache;
+                })
+                .catch(err => {
+                    if (err.name !== 'AbortError') console.error(`Erro ao carregar ${placa.nome}:`, err);
+                });
+        });
+
+        Promise.all(promessas).then(() => {
+            AppState.requisicaoEmAndamento = false;
+            document.getElementById('lastUpdate').innerText = 'Atualizado às ' + new Date().toLocaleTimeString();
+            if (callback) callback();
+        }).catch(() => { AppState.requisicaoEmAndamento = false; });
+    }
+
+    function atualizarGraficosPlaca(placa, dadosFiltrados) {
+        if (dadosFiltrados.length === 0) {
+            const chartAcel = AppState.chartsInstances[placa.acelId];
+            const chartFFT = AppState.chartsInstances[placa.fftId];
+            if (chartAcel) { chartAcel.data.labels = []; chartAcel.data.datasets.forEach(d => d.data = []); chartAcel.update('none'); }
+            if (chartFFT) { chartFFT.data.labels = []; chartFFT.data.datasets[0].data = []; chartFFT.update('none'); }
+            return;
+        }
+
+        const dadosGrafico = dadosFiltrados.length > MAX_PONTOS_GRAFICO
+            ? dadosFiltrados.slice(-MAX_PONTOS_GRAFICO)
+            : dadosFiltrados;
+
+        const labels = new Array(dadosGrafico.length);
+        const dataX = new Array(dadosGrafico.length);
+        const dataY = new Array(dadosGrafico.length);
+        const dataZ = new Array(dadosGrafico.length);
+        const dataResultante = new Array(dadosGrafico.length);
+        let somaDt = 0, contDt = 0;
+
+        for (let i = 0; i < dadosGrafico.length; i++) {
+            const item = dadosGrafico[i];
+            labels[i] = item.horaStr;
+            dataX[i] = item.x;
+            dataY[i] = item.y;
+            dataZ[i] = item.z;
+            dataResultante[i] = item.resultante;
+            if (item.dt > 0) { somaDt += item.dt; contDt++; }
+        }
+
+        const chartAcel = AppState.chartsInstances[placa.acelId];
+        if (chartAcel) {
+            chartAcel.data.labels = labels;
+            chartAcel.data.datasets[0].data = dataX;
+            chartAcel.data.datasets[1].data = dataY;
+            chartAcel.data.datasets[2].data = dataZ;
+            chartAcel.update('none');
+        }
+
+        const janelaFFT = dataResultante.slice(-MAX_PONTOS_FFT);
+        const dtMedio = contDt > 0 ? somaDt / contDt : 6.0;
+        const fs = 1.0 / dtMedio;
+
+        const hash = janelaFFT.length + '|' + janelaFFT[0] + '|' + janelaFFT[janelaFFT.length - 1] + '|' + dtMedio;
+        if (AppState.ultimaFFT[placa.acelId] === hash) return;
+
+        const resFFT = calcularFFT(janelaFFT, fs);
+        AppState.ultimaFFT[placa.acelId] = hash;
+
+        const chartFFT = AppState.chartsInstances[placa.fftId];
+        if (chartFFT) {
+            chartFFT.data.labels = resFFT.freqs;
+            chartFFT.data.datasets[0].data = resFFT.mags;
+            chartFFT.update('none');
+        }
+    }
+
+    function processarModoTempoReal() {
+        placasConfig.forEach(placa => {
+            if (placa.cache.length === 0) { atualizarGraficosPlaca(placa, []); return; }
+            const ultimoRegistro = placa.cache[placa.cache.length - 1];
+            const limiteTempo = new Date(ultimoRegistro.dataHora.getTime() - 24 * 60 * 60 * 1000);
+            const dadosRecentes = placa.cache.filter(item => item.dataHora >= limiteTempo);
+            atualizarGraficosPlaca(placa, dadosRecentes);
+        });
+    }
+
+    function processarModoHistorico() {
+        const inicioStr = document.getElementById('inputInicio').value;
+        const fimStr = document.getElementById('inputFim').value;
+        if (!inicioStr || !fimStr) return;
+        const dataInicio = new Date(inicioStr);
+        const dataFim = new Date(fimStr);
+
+        placasConfig.forEach(placa => {
+            const dadosFiltrados = placa.cache.filter(item => item.dataHora >= dataInicio && item.dataHora <= dataFim);
+            atualizarGraficosPlaca(placa, dadosFiltrados);
+        });
+    }
+
+    function carregarDadosGeral() {
+        baixarDadosTodasPlacas(() => {
+            const modo = document.getElementById('selectModo').value;
+            if (modo === 'realtime') processarModoTempoReal();
+            else processarModoHistorico();
+        });
+    }
+
+    function alternarModo() {
+        const modo = document.getElementById('selectModo').value;
+        const painelRT = document.getElementById('painelRealtime');
+        const painelHist = document.getElementById('painelHistorico');
+        const txtStatus = document.getElementById('txtLiveStatus');
+
+        if (modo === 'realtime') {
+            painelRT.classList.remove('hidden');
+            painelHist.classList.add('hidden');
+            txtStatus.innerText = 'MODO TEMPO REAL';
+            reiniciarTimer();
+            processarModoTempoReal();
+        } else {
+            painelRT.classList.add('hidden');
+            painelHist.classList.remove('hidden');
+            txtStatus.innerText = 'MODO HISTÓRICO (JANELA)';
+            if (AppState.timerIntervalo) { clearInterval(AppState.timerIntervalo); AppState.timerIntervalo = null; }
+            processarModoHistorico();
+        }
+    }
+
+    function reiniciarTimer() {
+        if (AppState.timerIntervalo) { clearInterval(AppState.timerIntervalo); AppState.timerIntervalo = null; }
+        const intervaloMs = parseInt(document.getElementById('selectIntervalo').value);
+        AppState.timerIntervalo = setInterval(() => {
+            baixarDadosTodasPlacas(() => {
+                const modo = document.getElementById('selectModo').value;
+                if (modo === 'realtime') processarModoTempoReal();
+            });
+        }, intervaloMs);
+    }
+
+    function forcarAtualizacao()      { carregarDadosGeral(); }
+    function aplicarFiltroHistorico() { processarModoHistorico(); }
+    function resetZoomTodos() {
+        Object.values(AppState.chartsInstances).forEach(chart => chart.resetZoom());
+    }
+
+    /* =====================================================================
+       INICIALIZAÇÃO
+       ===================================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+        definirDatasDefaultHoje();
+        inicializarGraficos();
+        carregarDadosGeral();
+        reiniciarTimer();
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && !AppState.vtkReady && !AppState.vtkLoading) {
+                    carregarVTK();
+                    observer.disconnect();
+                }
+            });
+        }, { rootMargin: '200px' });
+        observer.observe(document.getElementById('sectionEstrutura'));
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (AppState.timerIntervalo) clearInterval(AppState.timerIntervalo);
+        if (AppState.abortController) AppState.abortController.abort();
+    });
+    </script>
+</body>
+</html>
