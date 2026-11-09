@@ -278,6 +278,45 @@
             border: 1px solid rgba(34,227,160,0.2);
         }
 
+        /* ================= CARDS MÍN / MÁX ================= */
+        .stats-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+        .stats-header h3 { margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text); }
+        .stats-header span { font-size: 0.78rem; color: var(--text-dim); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stats-col { display: flex; flex-direction: column; gap: 10px; }
+        .stats-col-title { font-size: 0.86rem; font-weight: 700; color: var(--text); }
+        .stats-col-sub { font-size: 0.74rem; color: var(--text-dim); margin-top: -6px; }
+        .stat-card {
+            background: rgba(8, 14, 28, 0.55);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 12px;
+            padding: 12px 14px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .stat-card.max { border-left-color: var(--red); }
+        .stat-tag { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #9EC3FF; }
+        .stat-card.max .stat-tag { color: #FF9AA5; }
+        .stat-valor { font-size: 1.45rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+        .stat-valor small { font-size: 0.8rem; font-weight: 500; color: var(--text-dim); }
+        .stat-linha { font-size: 0.82rem; color: var(--text); font-variant-numeric: tabular-nums; }
+        .stat-linha.dim { color: var(--text-dim); font-size: 0.76rem; }
+        .stat-info { display: flex; flex-direction: column; gap: 4px; }
+        .stat-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .stat-freq { font-size: 1.05rem; font-weight: 700; color: var(--amber); font-variant-numeric: tabular-nums; cursor: help; }
+        .stat-freq small { font-size: 0.68rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+        .stat-freq.fora { color: var(--text-dim); }
+        .fonte-badge {
+            font-size: 0.78rem; color: var(--text-dim); cursor: help;
+            padding: 6px 12px; border-radius: 8px;
+            background: rgba(79,140,255,0.06); border: 1px solid var(--border);
+        }
+        .freq-aviso {
+            font-size: 0.8rem; color: var(--amber);
+            padding: 6px 12px; border-radius: 8px;
+            background: rgba(255,200,87,0.08); border: 1px solid rgba(255,200,87,0.25);
+        }
+
         /* ================= GRID DE GRÁFICOS ================= */
         .charts-grid {
             display: grid;
@@ -458,7 +497,7 @@
     <section class="hero">
         <div class="hero-logo-wrap">
             <img
-                src="Neon Jedi Structural Monitoring Emblem.png"
+                src="logo.jpeg"
                 alt="Emblema Neon — Grupo JEDI"
                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
             >
@@ -543,8 +582,9 @@
                     <div class="control-row">
                         <label style="font-weight: 600; color: var(--text);">Modo:</label>
                         <select id="selectModo" onchange="alternarModo()">
-                            <option value="realtime">Tempo Real</option>
-                            <option value="historico">Histórico</option>
+                            <option value="realtime">Tempo Real (últimas 24 h)</option>
+                            <option value="historico">Histórico (escolher período)</option>
+                            <option value="completo">Completo (todos os dados)</option>
                         </select>
                         <button class="secondary" onclick="resetZoomTodos()">Resetar Zoom</button>
                     </div>
@@ -571,7 +611,25 @@
                         <input type="datetime-local" id="inputFim">
                         <button onclick="aplicarFiltroHistorico()">Aplicar Filtro</button>
                     </div>
+                    <div class="control-row">
+                        <label for="selectFaixaFreq">Faixa de frequência (FFT):</label>
+                        <select id="selectFaixaFreq" onchange="aplicarFiltroFrequencia()">
+                            <option value="todas">Todas as frequências</option>
+                            <option value="f1">4,0535 Hz – 4,0566 Hz</option>
+                            <option value="f2">38,42 Hz – 41,21 Hz</option>
+                        </select>
+                        <span id="avisoFreq" class="freq-aviso hidden"></span>
+                    </div>
+                    <div class="control-row">
+                        <span id="fonteDados" class="fonte-badge">Fonte: verificando…</span>
+                    </div>
                 </div>
+
+                <div class="stats-header">
+                    <h3>📌 Extremos da aceleração resultante</h3>
+                    <span>√(X² + Y² + Z²) no período exibido · duração = até a leitura seguinte mudar de valor</span>
+                </div>
+                <div class="stats-grid" id="statsGrid"></div>
 
                 <div class="charts-grid">
                     <div class="chart-card"><canvas id="chartPlaca1Acel"></canvas></div>
@@ -859,16 +917,763 @@
        MÓDULO 2: GRÁFICOS
        ===================================================================== */
     const SPREADSHEET_ID = '1UE60YdMQbzMsPmKFnq2p9QADqVC9TVblLanJJDEqL3Y';
-    const MAX_CACHE_PONTOS   = 5000;
+    const PASTA_HISTORICO    = 'dados';           // gerada pelo preparar_historico.py (historico.json + .bin por placa)
+    const ARQUIVO_HISTORICO  = 'historico.csv';   // alternativa: CSV bruto na pasta do HTML (mais lento)
     const MAX_PONTOS_GRAFICO = 600;
     const MAX_PONTOS_FFT     = 128;
+    const DIA_MS = 24 * 60 * 60 * 1000;
+
+    /* ---------- SÉRIE EM COLUNAS (arrays tipados) ----------
+       Cada placa guarda as leituras em colunas numéricas: 2 milhões de linhas ocupam ~70 MB,
+       contra ~400 MB se cada leitura fosse um objeto JS com Date e strings. */
+    class Serie {
+        constructor(cap = 4096) {
+            this.n  = 0;
+            this.t  = new Float64Array(cap);   // data/hora em ms (epoch, horário local)
+            this.x  = new Float32Array(cap);
+            this.y  = new Float32Array(cap);
+            this.z  = new Float32Array(cap);
+            this.dt = new Float32Array(cap);
+            this.r  = new Float64Array(cap);   // resultante √(x² + y² + z²)
+        }
+        _crescer(minimo) {
+            let cap = this.t.length;
+            while (cap < minimo) cap *= 2;
+            for (const k of ['t', 'x', 'y', 'z', 'dt', 'r']) {
+                const novo = new this[k].constructor(cap);
+                novo.set(this[k].subarray(0, this.n));
+                this[k] = novo;
+            }
+        }
+        push(t, x, y, z, dt) {
+            if (this.n >= this.t.length) this._crescer(this.n + 1);
+            const i = this.n++;
+            this.t[i] = t; this.x[i] = x; this.y[i] = y; this.z[i] = z; this.dt[i] = dt;
+            this.r[i] = Math.sqrt(x * x + y * y + z * z);
+        }
+        get ultimoT() { return this.n ? this.t[this.n - 1] : null; }
+        indiceDe(alvo) {                       // 1º índice com t >= alvo (busca binária)
+            let lo = 0, hi = this.n;
+            while (lo < hi) { const m = (lo + hi) >>> 1; if (this.t[m] < alvo) lo = m + 1; else hi = m; }
+            return lo;
+        }
+        truncar(n) { this.n = Math.max(0, Math.min(this.n, n)); }
+        ordenar() {                            // garante ordem temporal (estável); devolve true se precisou ordenar
+            const t = this.t;
+            let ok = true;
+            for (let i = 1; i < this.n; i++) if (t[i] < t[i - 1]) { ok = false; break; }
+            if (ok) return false;
+            const idx = Array.from({ length: this.n }, (_, i) => i).sort((a, b) => (t[a] - t[b]) || (a - b));
+            for (const k of ['t', 'x', 'y', 'z', 'dt', 'r']) {
+                const src = this[k], novo = new src.constructor(src.length);
+                for (let i = 0; i < idx.length; i++) novo[i] = src[idx[i]];
+                this[k] = novo;
+            }
+            return true;
+        }
+    }
+
+    // Um "período" é só um intervalo de índices [i0, i1) dentro da série — nada é copiado.
+    const visao = (s, i0, i1) => ({ s, i0, i1 });
 
     const placasConfig = [
-        { id: '647241587',  nome: 'Placa 1 (Placa_01)', acelId: 'chartPlaca1Acel', fftId: 'chartPlaca1FFT', cache: [] },
-        { id: '199228400',  nome: 'Placa 2 (Placa_02)', acelId: 'chartPlaca2Acel', fftId: 'chartPlaca2FFT', cache: [] },
-        { id: '1321485967', nome: 'Placa 3 (Placa_04)', acelId: 'chartPlaca3Acel', fftId: 'chartPlaca3FFT', cache: [] },
-        { id: '628945184',  nome: 'Placa 4 (Placa_05)', acelId: 'chartPlaca4Acel', fftId: 'chartPlaca4FFT', cache: [] }
+        { id: '647241587',  codigo: 'Placa_01', nome: 'Placa 1 (Placa_01)', acelId: 'chartPlaca1Acel', fftId: 'chartPlaca1FFT', serie: new Serie() },
+        { id: '199228400',  codigo: 'Placa_02', nome: 'Placa 2 (Placa_02)', acelId: 'chartPlaca2Acel', fftId: 'chartPlaca2FFT', serie: new Serie() },
+        { id: '1321485967', codigo: 'Placa_04', nome: 'Placa 3 (Placa_04)', acelId: 'chartPlaca3Acel', fftId: 'chartPlaca3FFT', serie: new Serie() },
+        { id: '628945184',  codigo: 'Placa_05', nome: 'Placa 4 (Placa_05)', acelId: 'chartPlaca4Acel', fftId: 'chartPlaca4FFT', serie: new Serie() }
     ];
+
+    // Faixas de frequência do filtro da FFT (Hz)
+    const FAIXAS_FREQ = {
+        todas: null,
+        f1: { min: 4.0535, max: 4.0566, label: '4,0535–4,0566 Hz' },
+        f2: { min: 38.42,  max: 41.21,  label: '38,42–41,21 Hz' }
+    };
+    const FFTState = {};   // último espectro completo de cada placa (para refiltrar sem recalcular)
+    AppState.primeiraCargaOk = false;   // true quando já existe histórico (CSV e/ou planilha completa)
+
+    /* ---------- FORMATAÇÃO ---------- */
+    const fmtNum    = (v, d) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtData   = (t) => new Date(t).toLocaleDateString('pt-BR');
+    const fmtHora   = (t) => new Date(t).toLocaleTimeString('pt-BR');
+    const fmtRotulo = (t) => `${fmtData(t)} ${fmtHora(t)}`;
+    const fmtHz     = (f) => fmtNum(f, 4) + ' Hz';
+    const arred5    = (v) => Math.round(v * 1e5) / 1e5;
+    const faixaAtual = () => FAIXAS_FREQ[document.getElementById('selectFaixaFreq').value];
+    const setStatus  = (txt) => { document.getElementById('lastUpdate').innerText = txt; };
+
+    function fmtGviz(t) {               // data no formato aceito pela Query Language do Google
+        const d = new Date(t), p = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    }
+
+    function fmtDuracao(ms) {
+        const s = Math.round(ms / 1000);
+        if (s < 60) return `${s} s`;
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+        if (h > 0) return `${h} h ${m} min`;
+        return r > 0 ? `${m} min ${r} s` : `${m} min`;
+    }
+
+    /* =====================================================================
+       HISTÓRICO VIA CSV (lido no navegador, sem script externo)
+       ===================================================================== */
+    class BufTipado {                    // vetor tipado que cresce sozinho
+        constructor(Tipo, cap = 4096) { this.a = new Tipo(cap); this.n = 0; }
+        push(v) {
+            if (this.n >= this.a.length) { const b = new this.a.constructor(this.a.length * 2); b.set(this.a); this.a = b; }
+            this.a[this.n++] = v;
+        }
+    }
+
+    // Separa uma linha em campos respeitando aspas ("10,5" com vírgula decimal, por exemplo)
+    function dividirLinha(linha, sep, nCampos) {
+        if (linha.indexOf('"') < 0) return linha.split(sep);
+        const rapido = linha.split(sep);
+        if (rapido.length === nCampos) return rapido.map(f => (f.charCodeAt(0) === 34 ? f.slice(1, -1) : f));
+        const out = []; let cur = '', aspas = false;
+        for (let i = 0; i < linha.length; i++) {
+            const c = linha[i];
+            if (c === '"') { if (aspas && linha[i + 1] === '"') { cur += '"'; i++; } else aspas = !aspas; }
+            else if (c === sep && !aspas) { out.push(cur); cur = ''; }
+            else cur += c;
+        }
+        out.push(cur);
+        return out;
+    }
+
+    // Extrai os números de uma data ("11/4/2026 18:33:19", "04/11/2026 18:33", "2026-11-04T18:33:19", "...6:33:19 PM")
+    const _P = [0, 0, 0, 0, 0, 0];
+    function partesData(str) {
+        let k = 0, v = -1;
+        for (let i = 0; i < str.length && k < 6; i++) {
+            const c = str.charCodeAt(i);
+            if (c >= 48 && c <= 57) v = (v < 0 ? 0 : v * 10) + (c - 48);
+            else if (v >= 0) { _P[k++] = v; v = -1; }
+        }
+        if (v >= 0 && k < 6) _P[k++] = v;
+        if (k < 3) return false;
+        for (; k < 6; k++) _P[k] = 0;
+        const c0 = str.charCodeAt(str.length - 2) | 32;          // "...PM" / "...AM"
+        if ((str.charCodeAt(str.length - 1) | 32) === 109 && (c0 === 112 || c0 === 97)) {
+            if (c0 === 112 && _P[3] < 12) _P[3] += 12;
+            if (c0 === 97 && _P[3] === 12) _P[3] = 0;
+        }
+        return true;
+    }
+
+    const numCSV = (f) => {
+        if (f === undefined) return NaN;
+        f = f.trim();
+        if (f === '') return NaN;
+        return parseFloat(f.indexOf(',') >= 0 ? f.replace(',', '.') : f);
+    };
+
+    // Lê o CSV em blocos (streaming). Datas ficam primeiro como (A, B, ano, ms do dia) porque
+    // "11/4/2026" pode ser 4 de nov. (formato do Sheets) ou 11 de abr. (Excel pt-BR) — a ordem é decidida no fim.
+    async function lerCSVHistorico(stream, totalBytes, aoProgredir) {
+        let bytes = 0, desdeYield = 0;
+        const contador = new TransformStream({ transform(chunk, ctl) { bytes += chunk.byteLength; ctl.enqueue(chunk); } });
+        const leitor = stream.pipeThrough(contador).pipeThrough(new TextDecoderStream('utf-8')).getReader();
+
+        const tmp = new Map();               // codigo → { serie (t = ms do dia), A, B, Y }
+        const desconhecidas = new Map();
+        let sep = null, nCampos = 6, linhas = 0, validas = 0, ignoradas = 0;
+        let votoMDY = 0, votoDMY = 0, linhasISO = 0, resto = '', primeira = true;
+
+        const processar = (linha) => {
+            if (linha.charCodeAt(linha.length - 1) === 13) linha = linha.slice(0, -1);
+            if (primeira) {
+                primeira = false;
+                if (linha.charCodeAt(0) === 0xFEFF) linha = linha.slice(1);
+                const cont = { ';': linha.split(';').length, '\t': linha.split('\t').length, ',': linha.split(',').length };
+                sep = Object.keys(cont).reduce((a, b) => (cont[b] > cont[a] ? b : a), ';');
+                nCampos = cont[sep];
+                const semAspas = linha.replace(/^"/, '');
+                if (!/^\d/.test(semAspas)) return;          // era cabeçalho
+            }
+            if (linha.length < 5) return;
+            linhas++;
+            const f = dividirLinha(linha, sep, nCampos);
+            if (!partesData(f[0] || '')) { ignoradas++; return; }
+            const x = numCSV(f[2]), y = numCSV(f[3]), z = numCSV(f[4]);
+            if (!(isFinite(x) && isFinite(y) && isFinite(z))) { ignoradas++; return; }
+            const dt = numCSV(f[5]);
+            const cod = (f[1] || '').trim();
+            let d = tmp.get(cod);
+            if (!d) {
+                if (!placasConfig.some(p => p.codigo === cod)) { desconhecidas.set(cod, (desconhecidas.get(cod) || 0) + 1); ignoradas++; return; }
+                d = { serie: new Serie(65536), A: new BufTipado(Uint8Array, 65536), B: new BufTipado(Uint8Array, 65536), Y: new BufTipado(Uint16Array, 65536) };
+                tmp.set(cod, d);
+            }
+            let A, B, Y;
+            if (_P[0] > 31) { Y = _P[0]; A = _P[1]; B = _P[2]; linhasISO++; }  // ISO aaaa-MM-dd → A = mês
+            else { A = _P[0]; B = _P[1]; Y = _P[2] < 100 ? 2000 + _P[2] : _P[2]; if (A > 12) votoDMY++; if (B > 12) votoMDY++; }
+            d.A.push(A); d.B.push(B); d.Y.push(Y);
+            d.serie.push(_P[3] * 3600000 + _P[4] * 60000 + _P[5] * 1000, x, y, z, isFinite(dt) ? dt : 0);
+            validas++;
+        };
+
+        while (true) {
+            const { value, done } = await leitor.read();
+            if (done) break;
+            const blocos = (resto + value).split('\n');
+            resto = blocos.pop();
+            for (let i = 0; i < blocos.length; i++) processar(blocos[i]);
+            if (bytes - desdeYield > 8 * 1048576) {          // a cada ~8 MB devolve o controle para a tela
+                desdeYield = bytes;
+                if (aoProgredir) aoProgredir(bytes, totalBytes);
+                await new Promise(r => setTimeout(r, 0));
+            }
+        }
+        if (resto) processar(resto);
+
+        // Ordem dia/mês ("11/4" = 4/nov ou 11/abr?). Critérios, em ordem:
+        //  1) evidência direta (algum número > 12 na 1ª ou 2ª posição) — ISO sempre é ano-mês-dia;
+        //  2) a leitura errada costuma gerar datas no futuro;
+        //  3) a leitura errada transforma cada troca de dia em troca de mês → série "esticada" por meses;
+        //  4) separador ";" é típico do Excel em português (dia/mês).
+        let ordem, criterio;
+        if (linhasISO && !votoMDY && !votoDMY) { ordem = 'mdy'; criterio = 'formato ISO (ano-mês-dia)'; }
+        else if (votoMDY && !votoDMY) { ordem = 'mdy'; criterio = 'há dia > 12 na 2ª posição'; }
+        else if (votoDMY && !votoMDY) { ordem = 'dmy'; criterio = 'há dia > 12 na 1ª posição'; }
+        else if (votoDMY && votoMDY) { ordem = votoDMY > votoMDY ? 'dmy' : 'mdy'; criterio = `conflito (${votoDMY} × ${votoMDY}), venceu a maioria`; }
+        else {
+            const limiteFuturo = Date.now() + DIA_MS;
+            const avaliar = (mdy) => {
+                let futuras = 0, tMin = Infinity, tMax = -Infinity;
+                const cache = new Map();
+                for (const d of tmp.values()) {
+                    for (let i = 0; i < d.serie.n; i++) {
+                        const M = mdy ? d.A.a[i] : d.B.a[i], D = mdy ? d.B.a[i] : d.A.a[i];
+                        const ch = (d.Y.a[i] * 13 + M) * 32 + D;
+                        let mn = cache.get(ch);
+                        if (mn === undefined) { mn = new Date(d.Y.a[i], M - 1, D).getTime(); cache.set(ch, mn); }
+                        const t = mn + d.serie.t[i];
+                        if (t > limiteFuturo) futuras++;
+                        if (t < tMin) tMin = t;
+                        if (t > tMax) tMax = t;
+                    }
+                }
+                return { futuras, span: tMax - tMin };
+            };
+            const m = avaliar(true), d = avaliar(false);
+            const dias = (x) => fmtNum(x.span / DIA_MS, 1);
+            if (m.futuras !== d.futuras) {
+                ordem = m.futuras < d.futuras ? 'mdy' : 'dmy';
+                criterio = `datas ambíguas; a outra leitura gera datas no futuro (M/d=${m.futuras}, d/M=${d.futuras})`;
+            } else if (Math.abs(m.span - d.span) > DIA_MS / 2) {
+                ordem = m.span < d.span ? 'mdy' : 'dmy';
+                criterio = `datas ambíguas; período mais curto (M/d=${dias(m)} dias, d/M=${dias(d)} dias)`;
+            } else {
+                ordem = sep === ';' ? 'dmy' : 'mdy';
+                criterio = `datas ambíguas; decidido pelo separador (${sep === ';' ? 'Excel pt-BR' : 'padrão do Sheets'})`;
+            }
+        }
+
+        // Converte para timestamp final (meia-noite de cada dia é calculada uma vez só)
+        const meiaNoite = new Map();
+        const series = new Map();
+        let ultimo = -Infinity, reordenadas = 0;
+        for (const [cod, d] of tmp) {
+            const s = d.serie;
+            for (let i = 0; i < s.n; i++) {
+                const M = ordem === 'mdy' ? d.A.a[i] : d.B.a[i];
+                const D = ordem === 'mdy' ? d.B.a[i] : d.A.a[i];
+                const chave = (d.Y.a[i] * 13 + M) * 32 + D;
+                let mn = meiaNoite.get(chave);
+                if (mn === undefined) { mn = new Date(d.Y.a[i], M - 1, D).getTime(); meiaNoite.set(chave, mn); }
+                s.t[i] = mn + s.t[i];
+            }
+            if (s.ordenar()) reordenadas++;
+            if (s.n && s.ultimoT > ultimo) ultimo = s.ultimoT;
+            series.set(cod, s);
+        }
+        if (aoProgredir) aoProgredir(bytes, totalBytes);
+        return { series, linhas, validas, ignoradas, desconhecidas, ordem, criterio, reordenadas, ultimo, sep, bytes };
+    }
+
+    /* ---------- HISTÓRICO BINÁRIO (dados/, gerado pelo preparar_historico.py) ---------- */
+    // Converte "horário de parede" (segundos, sem fuso) para o epoch local do navegador — mesmo
+    // critério usado nas datas da planilha (new Date(ano, mês, dia, ...)).
+    function paredeParaLocal(seg, cacheDia) {
+        const dia = Math.floor(seg / 86400);
+        let off = cacheDia.get(dia);
+        if (off === undefined) {
+            const d = new Date(dia * DIA_MS);
+            off = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).getTime() - dia * DIA_MS;
+            cacheDia.set(dia, off);
+        }
+        return seg * 1000 + off;
+    }
+
+    async function carregarHistoricoBinario() {
+        let man;
+        try {
+            const r = await fetch(`${PASTA_HISTORICO}/historico.json`, { cache: 'no-store' });
+            if (!r.ok) return false;
+            man = await r.json();
+        } catch (e) { return false; }
+
+        AppState.lendoCSV = true;
+        const t0 = performance.now();
+        setStatus(`Carregando histórico (${PASTA_HISTORICO}/)…`);
+        try {
+            const cacheDia = new Map();
+            let total = 0, bytes = 0, ultimo = -Infinity;
+            const series = await Promise.all(placasConfig.map(async (p) => {
+                const info = man.placas[p.codigo];
+                if (!info || !info.n) return null;
+                const resp = await fetch(`${PASTA_HISTORICO}/${info.arquivo}`, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`${info.arquivo}: HTTP ${resp.status}`);
+                const buf = await resp.arrayBuffer();
+                const n = info.n;
+                if (buf.byteLength !== 16 * n) throw new Error(`${info.arquivo}: tamanho ${buf.byteLength}, esperado ${16 * n}`);
+                // colunas: uint32 segundos | float32 X | float32 Y | float32 Z
+                const tSeg = new Uint32Array(buf, 0, n);
+                const bx = new Float32Array(buf, 4 * n, n), by = new Float32Array(buf, 8 * n, n), bz = new Float32Array(buf, 12 * n, n);
+                const s = new Serie(n + 65536);                    // folga para as leituras novas da planilha
+                for (let i = 0; i < n; i++) {
+                    const dt = i > 0 ? tSeg[i] - tSeg[i - 1] : 0;  // o CSV não tem dt: vem do intervalo entre leituras
+                    s.push(paredeParaLocal(tSeg[i], cacheDia), bx[i], by[i], bz[i], dt);
+                }
+                s.ordenar();
+                total += n; bytes += buf.byteLength;
+                if (s.ultimoT > ultimo) ultimo = s.ultimoT;
+                return s;
+            }));
+            placasConfig.forEach((p, i) => { if (series[i]) p.serie = series[i]; });
+            AppState.primeiraCargaOk = placasConfig.some(p => p.serie.n > 0);
+            const res = { tipo: 'bin', validas: total, ultimo, bytes, man, segundos: (performance.now() - t0) / 1000 };
+            AppState.fonteCSV = res;
+            console.info('[Histórico binário]', res);
+            definirFonte(res);
+            processarModoAtual();
+            return true;
+        } catch (e) {
+            console.error(`[Histórico binário] falha ao ler ${PASTA_HISTORICO}/:`, e);
+            placasConfig.forEach(p => { p.serie = new Serie(); });
+            setStatus(`Erro ao ler ${PASTA_HISTORICO}/ — tentando outras fontes`);
+            return false;
+        } finally {
+            AppState.lendoCSV = false;
+        }
+    }
+
+    async function carregarHistoricoCSV() {
+        let resp;
+        try { resp = await fetch(ARQUIVO_HISTORICO, { cache: 'no-store' }); } catch (e) { return false; }
+        if (!resp.ok || !resp.body) { definirFonte(null); return false; }   // sem CSV: segue só com a planilha
+
+        AppState.lendoCSV = true;
+        const total = Number(resp.headers.get('Content-Length')) || 0;
+        const t0 = performance.now();
+        try {
+            const res = await lerCSVHistorico(resp.body, total, (b, tot) => {
+                setStatus(`Lendo ${ARQUIVO_HISTORICO}… ` + (tot ? `${Math.floor(100 * b / tot)}%` : `${fmtNum(b / 1048576, 0)} MB`));
+            });
+            placasConfig.forEach(p => { const s = res.series.get(p.codigo); if (s && s.n) p.serie = s; });
+            AppState.primeiraCargaOk = placasConfig.some(p => p.serie.n > 0);
+            res.segundos = (performance.now() - t0) / 1000;
+            AppState.fonteCSV = res;
+            console.info('[Histórico CSV]', res);
+            definirFonte(res);
+            processarModoAtual();
+            return true;
+        } catch (e) {
+            console.error('[Histórico CSV] falha ao ler:', e);
+            setStatus('Erro ao ler o CSV — usando só a planilha');
+            definirFonte(null);
+            return false;
+        } finally {
+            AppState.lendoCSV = false;
+        }
+    }
+
+    function definirFonte(res) {
+        const el = document.getElementById('fonteDados');
+        if (!el) return;
+        if (!res) { el.textContent = 'Fonte: planilha (Google Sheets)'; el.title = `Rode o preparar_historico.py (gera ${PASTA_HISTORICO}/) ou coloque um ${ARQUIVO_HISTORICO} na pasta para carregar o histórico completo.`; return; }
+        if (res.tipo === 'bin') {
+            const pl = Object.values(res.man.placas);
+            const soma = (k) => pl.reduce((a, p) => a + (p[k] || 0), 0);
+            el.textContent = `Fonte: histórico ${PASTA_HISTORICO}/ (${res.validas.toLocaleString('pt-BR')} leituras até ${fmtRotulo(res.ultimo)}) + planilha (Google Sheets)`;
+            el.title = `Lido em ${fmtNum(res.segundos, 1)} s · ${fmtNum(res.bytes / 1048576, 1)} MB · origem: ${res.man.fonte} · gerado em ${res.man.gerado_em} · ` +
+                       `limpeza: ${soma('fora_de_ordem_corrigidas')} leituras fora de ordem corrigidas, ${soma('duplicadas_removidas')} duplicadas removidas`;
+            return;
+        }
+        const nomeSep = { ',': 'vírgula', ';': 'ponto e vírgula', '\t': 'TAB' }[res.sep] || res.sep;
+        let txt = `Fonte: ${ARQUIVO_HISTORICO} (${res.validas.toLocaleString('pt-BR')} leituras até ${fmtRotulo(res.ultimo)}) + planilha (Google Sheets)`;
+        if (res.ignoradas) txt += ` · ${res.ignoradas.toLocaleString('pt-BR')} linha(s) ignorada(s)`;
+        el.textContent = txt;
+        el.title = `Lido em ${fmtNum(res.segundos, 1)} s · ${fmtNum(res.bytes / 1048576, 1)} MB · separador: ${nomeSep} · ` +
+                   `datas lidas como ${res.ordem === 'mdy' ? 'mês/dia/ano' : 'dia/mês/ano'} (${res.criterio})` +
+                   (res.desconhecidas.size ? ` · IDs desconhecidos: ${[...res.desconhecidas.keys()].join(', ')}` : '');
+    }
+
+    /* =====================================================================
+       PLANILHA (Google Sheets) — completa na 1ª vez ou incremental depois
+       ===================================================================== */
+    function baixarDadosTodasPlacas(callback) {
+        if (AppState.requisicaoEmAndamento || AppState.lendoCSV) { if (callback) callback(); return; }
+        AppState.requisicaoEmAndamento = true;
+        const completo = !AppState.primeiraCargaOk;
+        setStatus(completo ? 'Baixando planilha completa…' : 'Sincronizando 4 placas…');
+
+        if (AppState.abortController) AppState.abortController.abort();
+        AppState.abortController = new AbortController();
+        const signal = AppState.abortController.signal;
+
+        const promessas = placasConfig.map(placa => {
+            const s = placa.serie;
+            // Incremental: a planilha reenvia os últimos ~30 s que já temos (sobreposição) e esse trecho é
+            // substituído pela versão dela. A consulta começa 30 s antes do corte para cobrir arredondamentos.
+            const corte = (!completo && s.n) ? s.ultimoT - 30000 : null;
+            let url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${placa.id}`;
+            if (corte !== null) url += '&tq=' + encodeURIComponent(`select * where A >= datetime '${fmtGviz(corte - 30000)}'`);
+            return fetch(url, { signal })
+                .then(res => res.text())
+                .then(txt => {
+                    const m = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
+                    if (!m) return;
+                    const data = JSON.parse(m[1]);
+                    if (!data.table) return;
+                    // Hora pelo texto formatado ("f", segundo arredondado — igual ao CSV exportado do Sheets);
+                    // o valor interno ("v") vem truncado e criaria um vão de 1 leitura na emenda CSV ↔ planilha.
+                    const usarF = data.table.cols[0] && data.table.cols[0].pattern === 'M/d/yyyy H:mm:ss';
+                    const tempo = (cel) => {
+                        if (usarF && cel && cel.f) { const d = parseCellDataHora({ f: cel.f }); if (d) return d.getTime(); }
+                        const d = parseCellDataHora(cel);
+                        return d ? d.getTime() : null;
+                    };
+                    const novas = [];
+                    for (const row of data.table.rows) {
+                        const c = row.c;
+                        if (!c) continue;
+                        const t = tempo(c[0]);
+                        if (t === null || (corte !== null && t < corte)) continue;
+                        const num = (k) => (c[k] && c[k].v !== null && c[k].v !== undefined) ? Number(c[k].v) : 0;
+                        novas.push([t, num(2), num(3), num(4), num(5)]);
+                    }
+                    // Descarta da cache só o trecho que a planilha reenviou (a versão dela tem prioridade).
+                    // Se a planilha começa depois do corte (ex.: emenda com o histórico), o que vem antes é mantido.
+                    if (corte === null) s.truncar(0);
+                    else if (novas.length) {
+                        const t0 = novas.reduce((m, r) => Math.min(m, r[0]), Infinity);
+                        s.truncar(s.indiceDe(Math.max(corte, t0)));
+                    }
+                    for (const r of novas) s.push(r[0], r[1], r[2], r[3], r[4]);
+                    s.ordenar();
+                })
+                .catch(err => {
+                    if (err.name !== 'AbortError') console.error(`Erro ao carregar ${placa.nome}:`, err);
+                });
+        });
+
+        Promise.all(promessas).then(() => {
+            AppState.requisicaoEmAndamento = false;
+            AppState.primeiraCargaOk = placasConfig.some(p => p.serie.n > 0);
+            setStatus('Atualizado às ' + new Date().toLocaleTimeString());
+            if (callback) callback();
+        }).catch(() => { AppState.requisicaoEmAndamento = false; });
+    }
+
+    /* ---------- CARDS DE MÍNIMO / MÁXIMO (+ pico da FFT do evento) ---------- */
+    const CARD_VAZIO = (tipo) =>
+        `<span class="stat-tag">${tipo === 'min' ? '▼ Mínimo' : '▲ Máximo'}</span><span class="stat-linha dim">—</span>`;
+
+    const MiniFFT = {};   // 'min0'..'max3' → { st }: espectro da janela em torno do evento
+
+    function montarCardsExtremos() {
+        document.getElementById('statsGrid').innerHTML = placasConfig.map((placa, i) => `
+            <div class="stats-col">
+                <div class="stats-col-title">${placa.nome}</div>
+                <div class="stats-col-sub" id="statsPeriodo${i}">Carregando dados…</div>
+                <div class="stat-card min" id="statsMinInfo${i}">${CARD_VAZIO('min')}</div>
+                <div class="stat-card max" id="statsMaxInfo${i}">${CARD_VAZIO('max')}</div>
+            </div>`).join('');
+        placasConfig.forEach((_, i) => { MiniFFT[`min${i}`] = { st: null }; MiniFFT[`max${i}`] = { st: null }; });
+    }
+
+    // Acha todos os episódios (leituras consecutivas) com o valor extremo e devolve o mais longo.
+    // Duração de um episódio = do 1º registro com o valor até o registro seguinte com valor diferente.
+    function encontrarExtremo(v, alvo) {
+        const s = v.s, TOL = 1e-6;
+        let melhor = null, ocorrencias = 0, i = v.i0;
+        while (i < v.i1) {
+            if (Math.abs(s.r[i] - alvo) > TOL) { i++; continue; }
+            let j = i;
+            while (j + 1 < v.i1 && Math.abs(s.r[j + 1] - alvo) <= TOL) j++;
+            const emAndamento = (j + 1 >= v.i1);
+            const fim = emAndamento ? s.t[j] : s.t[j + 1];
+            const ep = { idx: i, inicio: s.t[i], fim, durMs: fim - s.t[i], leituras: j - i + 1, emAndamento };
+            ocorrencias++;
+            if (!melhor || ep.durMs > melhor.durMs) melhor = ep;
+            i = j + 1;
+        }
+        return { valor: alvo, ocorrencias, ...melhor };
+    }
+
+    // FFT de uma janela de MAX_PONTOS_FFT leituras centrada no evento (dentro do período exibido)
+    function espectroDoEvento(v, idx) {
+        const s = v.s, N = MAX_PONTOS_FFT;
+        let ini = Math.max(v.i0, idx - Math.floor(N / 2));
+        const fim = Math.min(v.i1, ini + N);
+        ini = Math.max(v.i0, fim - N);
+        const n = fim - ini;
+        if (n < 4) return null;
+
+        let soma = 0;
+        for (let k = ini; k < fim; k++) soma += s.r[k];
+        const media = soma / n;                                   // remove o nível DC (gravidade)
+        const sinal = new Array(n);
+        for (let k = 0; k < n; k++) sinal[k] = s.r[ini + k] - media;
+        const dts = [];
+        for (let k = ini + 1; k < fim; k++) if (s.dt[k] > 0) dts.push(s.dt[k]);
+        dts.sort((p, q) => p - q);
+        const dtMed = dts.length ? dts[Math.floor(dts.length / 2)] : 6.0;   // mediana: robusta a lacunas
+
+        const st = calcularFFT(sinal, 1.0 / dtMed);
+        st.janela = { leituras: n, inicio: s.t[ini], fim: s.t[fim - 1] };
+        return st;
+    }
+
+    function htmlCardExtremo(tipo, ext, i, s) {
+        const T = tipo === 'min' ? 'Min' : 'Max';
+        const k = ext.idx;
+        const dur = ext.emAndamento ? `${fmtDuracao(ext.durMs)} (ainda em curso)` : fmtDuracao(ext.durMs);
+        const ocorr = ext.ocorrencias > 1
+            ? `Atingido ${ext.ocorrencias}× no período · exibindo o episódio mais longo`
+            : 'Atingido 1× no período';
+        return `
+            <span class="stat-tag">${tipo === 'min' ? '▼ Mínimo' : '▲ Máximo'}</span>
+            <div class="stat-topo">
+                <span class="stat-valor">${fmtNum(ext.valor, 4)} <small>m/s²</small></span>
+                <span class="stat-freq" id="stats${T}Freq${i}"><small>pico FFT</small>—</span>
+            </div>
+            <span class="stat-linha">📅 ${fmtData(ext.inicio)} &nbsp;🕒 ${fmtHora(ext.inicio)}</span>
+            <span class="stat-linha">⏱ Durou ${dur} · ${ext.leituras} leitura${ext.leituras > 1 ? 's' : ''}</span>
+            <span class="stat-linha dim">X ${fmtNum(s.x[k], 3)} · Y ${fmtNum(s.y[k], 3)} · Z ${fmtNum(s.z[k], 3)}</span>
+            <span class="stat-linha dim">${ocorr}</span>`;
+    }
+
+    function atualizarCardsPlaca(placa, v) {
+        const i = placasConfig.indexOf(placa);
+        const elPer = document.getElementById(`statsPeriodo${i}`);
+        if (!elPer) return;
+        const info = { min: document.getElementById(`statsMinInfo${i}`), max: document.getElementById(`statsMaxInfo${i}`) };
+        const s = v.s;
+
+        let vMin = Infinity, vMax = -Infinity, nValidas = 0;
+        for (let k = v.i0; k < v.i1; k++) {
+            const r = s.r[k];
+            if (!(r > 0)) continue;                               // ignora leituras vazias
+            nValidas++;
+            if (r < vMin) vMin = r;
+            if (r > vMax) vMax = r;
+        }
+        if (nValidas === 0) {
+            elPer.textContent = AppState.primeiraCargaOk ? 'Sem dados no período' : 'Carregando dados…';
+            ['min', 'max'].forEach(tipo => { info[tipo].innerHTML = CARD_VAZIO(tipo); MiniFFT[`${tipo}${i}`].st = null; });
+            return;
+        }
+
+        elPer.textContent = `${(v.i1 - v.i0).toLocaleString('pt-BR')} leituras · ${fmtRotulo(s.t[v.i0])} → ${fmtRotulo(s.t[v.i1 - 1])}`;
+        [['min', vMin], ['max', vMax]].forEach(([tipo, alvo]) => {
+            const ext = encontrarExtremo(v, alvo);
+            info[tipo].innerHTML = htmlCardExtremo(tipo, ext, i, s);
+            MiniFFT[`${tipo}${i}`].st = espectroDoEvento(v, ext.idx);
+            renderMiniFFT(`${tipo}${i}`);
+        });
+    }
+
+    /* ---------- FFT: FILTRO POR FAIXA DE FREQUÊNCIA ---------- */
+    // Aplica a faixa selecionada a um espectro → índices das raias + texto de status
+    function filtrarEspectro(st, faixa) {
+        const nyq = st.fs / 2, df = st.fs / st.n;
+        const info = `fs ≈ ${fmtNum(st.fs, 3)} Hz · Nyquist ≈ ${fmtNum(nyq, 3)} Hz · Δf ≈ ${fmtNum(df, 4)} Hz`;
+        let idx = st.freqs.map((_, k) => k);
+        if (!faixa) return { idx, texto: info, alerta: false };
+        idx = idx.filter(k => st.freqs[k] >= faixa.min && st.freqs[k] <= faixa.max);
+        if (idx.length > 0) return { idx, texto: `${idx.length} raia(s) em ${faixa.label} · ${info}`, alerta: false };
+        return {
+            idx, alerta: true,
+            texto: faixa.min > nyq
+                ? `${faixa.label} está acima do Nyquist (${fmtNum(nyq, 3)} Hz): fora do alcance desta amostragem`
+                : `Nenhuma raia em ${faixa.label} (Δf ≈ ${fmtNum(df, 4)} Hz é maior que a faixa)`
+        };
+    }
+
+    // Escreve no card a frequência de pico da FFT em torno do evento (respeitando a faixa escolhida)
+    function renderMiniFFT(chave) {
+        const T = chave.startsWith('min') ? 'Min' : 'Max';
+        const el = document.getElementById(`stats${T}Freq${chave.slice(3)}`);
+        if (!el) return;
+        const m = MiniFFT[chave];
+        if (!m || !m.st || m.st.freqs.length === 0) { el.innerHTML = '<small>pico FFT</small>—'; el.title = ''; return; }
+
+        const f = filtrarEspectro(m.st, faixaAtual());
+        if (f.idx.length === 0) {
+            el.classList.add('fora');
+            el.innerHTML = '<small>pico FFT</small>—';
+            el.title = f.texto;
+            return;
+        }
+        let kPico = f.idx[0];
+        for (const k of f.idx) if (m.st.mags[k] > m.st.mags[kPico]) kPico = k;
+        const jan = m.st.janela;
+        el.classList.remove('fora');
+        el.innerHTML = `<small>pico FFT</small>${fmtHz(m.st.freqs[kPico])}`;
+        el.title = `Magnitude ${fmtNum(m.st.mags[kPico], 4)} · janela de ${jan.leituras} leituras ` +
+                   `(${fmtHora(jan.inicio)} → ${fmtHora(jan.fim)}) · ${f.texto}`;
+    }
+
+    function renderFFTPlaca(placa) {
+        const chart = AppState.chartsInstances[placa.fftId];
+        if (!chart) return;
+        const st = FFTState[placa.fftId];
+        const sub = chart.options.plugins.subtitle;
+
+        if (!st || st.freqs.length === 0) {
+            chart.data.labels = []; chart.data.datasets[0].data = [];
+            sub.text = ''; chart.update('none'); return;
+        }
+        const f = filtrarEspectro(st, faixaAtual());
+        sub.text = f.texto;
+        sub.color = f.alerta ? '#FFC857' : '#9AA9C7';
+        chart.data.labels = f.idx.map(k => fmtHz(st.freqs[k]));
+        chart.data.datasets[0].data = f.idx.map(k => st.mags[k]);
+        chart.update('none');
+    }
+
+    function atualizarAvisoFrequencia() {
+        const el = document.getElementById('avisoFreq');
+        const faixa = faixaAtual();
+        const estados = placasConfig.map(p => FFTState[p.fftId]).filter(Boolean);
+        if (!faixa || estados.length === 0) { el.classList.add('hidden'); return; }
+        const nyqMax = Math.max(...estados.map(s => s.fs / 2));
+        if (faixa.min <= nyqMax) { el.classList.add('hidden'); return; }
+        el.textContent = `⚠ Com 1 leitura a cada ~${fmtNum(1 / (2 * nyqMax), 1)} s os dados só enxergam até ${fmtNum(nyqMax, 3)} Hz. ` +
+                         `Para ver ${faixa.label} o sensor precisa amostrar acima de ${fmtNum(2 * faixa.max, 1)} Hz (Nyquist).`;
+        el.classList.remove('hidden');
+    }
+
+    function aplicarFiltroFrequencia() {
+        placasConfig.forEach(renderFFTPlaca);
+        Object.keys(MiniFFT).forEach(renderMiniFFT);
+        atualizarAvisoFrequencia();
+    }
+
+    /* ---------- GRÁFICOS ---------- */
+    // Reduz um período longo para ~maxPts pontos preservando picos: divide em baldes e guarda,
+    // de cada um, a leitura de menor e a de maior resultante (em ordem temporal). Devolve índices.
+    function reduzirParaGrafico(v, maxPts) {
+        const s = v.s, n = v.i1 - v.i0;
+        if (n <= maxPts) return Array.from({ length: n }, (_, k) => v.i0 + k);
+        const nBaldes = Math.floor(maxPts / 2);
+        const tam = n / nBaldes;
+        const out = [];
+        for (let b = 0; b < nBaldes; b++) {
+            const ini = v.i0 + Math.floor(b * tam);
+            const fim = Math.min(v.i1, v.i0 + Math.floor((b + 1) * tam));
+            if (fim <= ini) continue;
+            let iMin = ini, iMax = ini;
+            for (let k = ini + 1; k < fim; k++) {
+                if (s.r[k] < s.r[iMin]) iMin = k;
+                if (s.r[k] > s.r[iMax]) iMax = k;
+            }
+            if (iMin === iMax) out.push(iMin);
+            else if (iMin < iMax) out.push(iMin, iMax);
+            else out.push(iMax, iMin);
+        }
+        if (out[0] !== v.i0) out.unshift(v.i0);                    // eixo começa no início real
+        if (out[out.length - 1] !== v.i1 - 1) out.push(v.i1 - 1);  // ...e termina no fim real
+        return out;
+    }
+
+    function atualizarGraficosPlaca(placa, v) {
+        const chartAcel = AppState.chartsInstances[placa.acelId];
+        if (v.i1 - v.i0 === 0) {
+            const chartFFT = AppState.chartsInstances[placa.fftId];
+            if (chartAcel) { chartAcel.data.labels = []; chartAcel.data.datasets.forEach(d => d.data = []); chartAcel.update('none'); }
+            if (chartFFT) { chartFFT.data.labels = []; chartFFT.data.datasets[0].data = []; chartFFT.update('none'); }
+            atualizarCardsPlaca(placa, v);
+            FFTState[placa.fftId] = null;
+            AppState.ultimaFFT[placa.acelId] = null;
+            renderFFTPlaca(placa);
+            atualizarAvisoFrequencia();
+            return;
+        }
+
+        atualizarCardsPlaca(placa, v);
+
+        const s = v.s;
+        const idx = reduzirParaGrafico(v, MAX_PONTOS_GRAFICO);
+        if (chartAcel) {
+            chartAcel.data.labels = idx.map(k => fmtRotulo(s.t[k]));
+            chartAcel.data.datasets[0].data = idx.map(k => arred5(s.x[k]));
+            chartAcel.data.datasets[1].data = idx.map(k => arred5(s.y[k]));
+            chartAcel.data.datasets[2].data = idx.map(k => arred5(s.z[k]));
+            chartAcel.update('none');
+        }
+
+        // FFT principal: últimas MAX_PONTOS_FFT leituras BRUTAS do período (nunca as reduzidas do gráfico)
+        const ini = Math.max(v.i0, v.i1 - MAX_PONTOS_FFT);
+        const janelaFFT = Array.from(s.r.subarray(ini, v.i1));
+        const dts = Array.from(s.dt.subarray(ini + 1, v.i1)).filter(x => x > 0).sort((p, q) => p - q);
+        const dtMedio = dts.length ? dts[Math.floor(dts.length / 2)] : 6.0;   // mediana: robusta a lacunas
+        const fs = 1.0 / dtMedio;
+
+        const hash = `${v.i1 - ini}|${s.t[ini]}|${s.t[v.i1 - 1]}|${dtMedio}`;
+        if (AppState.ultimaFFT[placa.acelId] === hash) return;
+
+        const resFFT = calcularFFT(janelaFFT, fs);
+        AppState.ultimaFFT[placa.acelId] = hash;
+
+        FFTState[placa.fftId] = resFFT;
+        renderFFTPlaca(placa);
+        atualizarAvisoFrequencia();
+    }
+
+    /* ---------- MODOS ---------- */
+    function processarModoTempoReal() {
+        placasConfig.forEach(placa => {
+            const s = placa.serie;
+            if (!s.n) { atualizarGraficosPlaca(placa, visao(s, 0, 0)); return; }
+            atualizarGraficosPlaca(placa, visao(s, s.indiceDe(s.ultimoT - DIA_MS), s.n));
+        });
+    }
+
+    function processarModoCompleto() {
+        placasConfig.forEach(placa => atualizarGraficosPlaca(placa, visao(placa.serie, 0, placa.serie.n)));
+    }
+
+    function processarModoHistorico() {
+        const inicioStr = document.getElementById('inputInicio').value;
+        const fimStr = document.getElementById('inputFim').value;
+        if (!inicioStr || !fimStr) return;
+        const tIni = new Date(inicioStr).getTime();
+        const tFim = new Date(fimStr).getTime();
+        placasConfig.forEach(placa => {
+            const s = placa.serie;
+            atualizarGraficosPlaca(placa, visao(s, s.indiceDe(tIni), s.indiceDe(tFim + 1)));
+        });
+    }
+
+    function processarModoAtual() {
+        const modo = document.getElementById('selectModo').value;
+        if (modo === 'realtime') processarModoTempoReal();
+        else if (modo === 'completo') processarModoCompleto();
+        else processarModoHistorico();
+    }
+
+    async function carregarDadosGeral() {
+        if (!AppState.historicoVerificado) {           // 1ª vez: tenta o CSV local antes da planilha
+            AppState.historicoVerificado = true;
+            if (!(await carregarHistoricoBinario())) await carregarHistoricoCSV();
+        }
+        baixarDadosTodasPlacas(processarModoAtual);
+    }
 
     function inicializarGraficos() {
         const gridColor = 'rgba(120,150,220,0.12)';
@@ -924,6 +1729,7 @@
                     animation: false,
                     plugins: {
                         title: { display: true, text: `${placa.nome} — FFT`, color: '#F4F7FF', font: { size: 13, weight: '600' } },
+                        subtitle: { display: true, text: '', color: tickColor, font: { size: 10 }, padding: { bottom: 6 } },
                         legend: { display: false }
                     },
                     scales: {
@@ -1023,144 +1829,10 @@
         const freqs = [], mags = [];
         for (let k = 1; k < Math.floor(n / 2); k++) {
             const mag = Math.sqrt(re[k] * re[k] + im[k] * im[k]) / n;
-            freqs.push(((k * fs) / n).toFixed(2) + ' Hz');
+            freqs.push((k * fs) / n);
             mags.push(Number(mag.toFixed(4)));
         }
-        return { freqs, mags };
-    }
-
-    function baixarDadosTodasPlacas(callback) {
-        if (AppState.requisicaoEmAndamento) { if (callback) callback(); return; }
-        AppState.requisicaoEmAndamento = true;
-        document.getElementById('lastUpdate').innerText = 'Sincronizando 4 placas…';
-
-        if (AppState.abortController) AppState.abortController.abort();
-        AppState.abortController = new AbortController();
-        const signal = AppState.abortController.signal;
-
-        const promessas = placasConfig.map(placa => {
-            const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${placa.id}`;
-            return fetch(url, { signal })
-                .then(res => res.text())
-                .then(txt => {
-                    const jsonString = txt.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
-                    if (!jsonString) return;
-                    const data = JSON.parse(jsonString[1]);
-                    const novoCache = data.table.rows.map(row => {
-                        if (!row.c) return null;
-                        const cell0 = row.c[0];
-                        const dateObj = parseCellDataHora(cell0);
-                        if (!dateObj) return null;
-                        const horaStr = cell0.f || cell0.v || dateObj.toLocaleString('pt-BR');
-                        const x = row.c[2] ? Number(row.c[2].v) : 0;
-                        const y = row.c[3] ? Number(row.c[3].v) : 0;
-                        const z = row.c[4] ? Number(row.c[4].v) : 0;
-                        const resultante = Math.sqrt(x * x + y * y + z * z);
-                        return { dataHora: dateObj, horaStr, x, y, z, resultante, dt: row.c[5] ? Number(row.c[5].v) : 0 };
-                    }).filter(item => item !== null);
-
-                    placa.cache = novoCache.length > MAX_CACHE_PONTOS
-                        ? novoCache.slice(-MAX_CACHE_PONTOS)
-                        : novoCache;
-                })
-                .catch(err => {
-                    if (err.name !== 'AbortError') console.error(`Erro ao carregar ${placa.nome}:`, err);
-                });
-        });
-
-        Promise.all(promessas).then(() => {
-            AppState.requisicaoEmAndamento = false;
-            document.getElementById('lastUpdate').innerText = 'Atualizado às ' + new Date().toLocaleTimeString();
-            if (callback) callback();
-        }).catch(() => { AppState.requisicaoEmAndamento = false; });
-    }
-
-    function atualizarGraficosPlaca(placa, dadosFiltrados) {
-        if (dadosFiltrados.length === 0) {
-            const chartAcel = AppState.chartsInstances[placa.acelId];
-            const chartFFT = AppState.chartsInstances[placa.fftId];
-            if (chartAcel) { chartAcel.data.labels = []; chartAcel.data.datasets.forEach(d => d.data = []); chartAcel.update('none'); }
-            if (chartFFT) { chartFFT.data.labels = []; chartFFT.data.datasets[0].data = []; chartFFT.update('none'); }
-            return;
-        }
-
-        const dadosGrafico = dadosFiltrados.length > MAX_PONTOS_GRAFICO
-            ? dadosFiltrados.slice(-MAX_PONTOS_GRAFICO)
-            : dadosFiltrados;
-
-        const labels = new Array(dadosGrafico.length);
-        const dataX = new Array(dadosGrafico.length);
-        const dataY = new Array(dadosGrafico.length);
-        const dataZ = new Array(dadosGrafico.length);
-        const dataResultante = new Array(dadosGrafico.length);
-        let somaDt = 0, contDt = 0;
-
-        for (let i = 0; i < dadosGrafico.length; i++) {
-            const item = dadosGrafico[i];
-            labels[i] = item.horaStr;
-            dataX[i] = item.x;
-            dataY[i] = item.y;
-            dataZ[i] = item.z;
-            dataResultante[i] = item.resultante;
-            if (item.dt > 0) { somaDt += item.dt; contDt++; }
-        }
-
-        const chartAcel = AppState.chartsInstances[placa.acelId];
-        if (chartAcel) {
-            chartAcel.data.labels = labels;
-            chartAcel.data.datasets[0].data = dataX;
-            chartAcel.data.datasets[1].data = dataY;
-            chartAcel.data.datasets[2].data = dataZ;
-            chartAcel.update('none');
-        }
-
-        const janelaFFT = dataResultante.slice(-MAX_PONTOS_FFT);
-        const dtMedio = contDt > 0 ? somaDt / contDt : 6.0;
-        const fs = 1.0 / dtMedio;
-
-        const hash = janelaFFT.length + '|' + janelaFFT[0] + '|' + janelaFFT[janelaFFT.length - 1] + '|' + dtMedio;
-        if (AppState.ultimaFFT[placa.acelId] === hash) return;
-
-        const resFFT = calcularFFT(janelaFFT, fs);
-        AppState.ultimaFFT[placa.acelId] = hash;
-
-        const chartFFT = AppState.chartsInstances[placa.fftId];
-        if (chartFFT) {
-            chartFFT.data.labels = resFFT.freqs;
-            chartFFT.data.datasets[0].data = resFFT.mags;
-            chartFFT.update('none');
-        }
-    }
-
-    function processarModoTempoReal() {
-        placasConfig.forEach(placa => {
-            if (placa.cache.length === 0) { atualizarGraficosPlaca(placa, []); return; }
-            const ultimoRegistro = placa.cache[placa.cache.length - 1];
-            const limiteTempo = new Date(ultimoRegistro.dataHora.getTime() - 24 * 60 * 60 * 1000);
-            const dadosRecentes = placa.cache.filter(item => item.dataHora >= limiteTempo);
-            atualizarGraficosPlaca(placa, dadosRecentes);
-        });
-    }
-
-    function processarModoHistorico() {
-        const inicioStr = document.getElementById('inputInicio').value;
-        const fimStr = document.getElementById('inputFim').value;
-        if (!inicioStr || !fimStr) return;
-        const dataInicio = new Date(inicioStr);
-        const dataFim = new Date(fimStr);
-
-        placasConfig.forEach(placa => {
-            const dadosFiltrados = placa.cache.filter(item => item.dataHora >= dataInicio && item.dataHora <= dataFim);
-            atualizarGraficosPlaca(placa, dadosFiltrados);
-        });
-    }
-
-    function carregarDadosGeral() {
-        baixarDadosTodasPlacas(() => {
-            const modo = document.getElementById('selectModo').value;
-            if (modo === 'realtime') processarModoTempoReal();
-            else processarModoHistorico();
-        });
+        return { freqs, mags, fs, n };
     }
 
     function alternarModo() {
@@ -1169,12 +1841,12 @@
         const painelHist = document.getElementById('painelHistorico');
         const txtStatus = document.getElementById('txtLiveStatus');
 
-        if (modo === 'realtime') {
+        if (modo === 'realtime' || modo === 'completo') {
             painelRT.classList.remove('hidden');
             painelHist.classList.add('hidden');
-            txtStatus.innerText = 'MODO TEMPO REAL';
+            txtStatus.innerText = modo === 'realtime' ? 'MODO TEMPO REAL (24 H)' : 'MODO COMPLETO (TODOS OS DADOS)';
             reiniciarTimer();
-            processarModoTempoReal();
+            processarModoAtual();
         } else {
             painelRT.classList.add('hidden');
             painelHist.classList.remove('hidden');
@@ -1190,7 +1862,7 @@
         AppState.timerIntervalo = setInterval(() => {
             baixarDadosTodasPlacas(() => {
                 const modo = document.getElementById('selectModo').value;
-                if (modo === 'realtime') processarModoTempoReal();
+                if (modo !== 'historico') processarModoAtual();   // Histórico é uma janela fixa
             });
         }, intervaloMs);
     }
@@ -1206,6 +1878,7 @@
        ===================================================================== */
     window.addEventListener('DOMContentLoaded', () => {
         definirDatasDefaultHoje();
+        montarCardsExtremos();
         inicializarGraficos();
         carregarDadosGeral();
         reiniciarTimer();
