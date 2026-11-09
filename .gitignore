@@ -1,0 +1,5 @@
+# CSV bruto de backup (88 MB) - os dados vao em dados/*.bin, gerados pelo preparar_historico.py
+BACKUP DADOS*.csv
+historico.csv
+# copias locais do HTML
+*.backup.html

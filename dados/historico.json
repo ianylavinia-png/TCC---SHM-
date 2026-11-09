@@ -1,0 +1,46 @@
+{
+  "gerado_em": "2026-11-09T00:48:34",
+  "fonte": "BACKUP DADOS - IMPORTANTE - Sketch_sep1a - Página1_v1.csv",
+  "formato_data": "dmy",
+  "formato_bin": "uint32[n] segundos (horário de parede, sem fuso) | float32[n] X | float32[n] Y | float32[n] Z — little-endian",
+  "placas": {
+    "Placa_01": {
+      "arquivo": "historico_Placa_01.bin",
+      "n": 320568,
+      "inicio": "09/10/2026 12:32:27",
+      "fim": "04/11/2026 18:32:53",
+      "linhas_lidas": 320711,
+      "fora_de_ordem_corrigidas": 39,
+      "duplicadas_removidas": 143
+    },
+    "Placa_02": {
+      "arquivo": "historico_Placa_02.bin",
+      "n": 356628,
+      "inicio": "09/10/2026 12:33:58",
+      "fim": "04/11/2026 18:32:55",
+      "linhas_lidas": 356758,
+      "fora_de_ordem_corrigidas": 36,
+      "duplicadas_removidas": 130
+    },
+    "Placa_04": {
+      "arquivo": "historico_Placa_04.bin",
+      "n": 349680,
+      "inicio": "09/10/2026 12:33:53",
+      "fim": "04/11/2026 18:33:02",
+      "linhas_lidas": 349791,
+      "fora_de_ordem_corrigidas": 40,
+      "duplicadas_removidas": 111
+    },
+    "Placa_05": {
+      "arquivo": "historico_Placa_05.bin",
+      "n": 358045,
+      "inicio": "09/10/2026 12:33:57",
+      "fim": "04/11/2026 18:32:57",
+      "linhas_lidas": 358184,
+      "fora_de_ordem_corrigidas": 41,
+      "duplicadas_removidas": 139
+    }
+  },
+  "total": 1384921,
+  "linhas_ignoradas": 0
+}
